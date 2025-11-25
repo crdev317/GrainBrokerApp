@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using GrainBrokerAPI.Services;
 
 namespace GrainBrokerAPI.Controllers
 {
@@ -12,53 +13,73 @@ namespace GrainBrokerAPI.Controllers
     [ApiController]
     public class SuppliersController : ControllerBase
     {
-        private readonly GrainBrokerContext _context;
+        private readonly ISupplierService _supplierService;
 
-        public SuppliersController(GrainBrokerContext context)
+        public SuppliersController(ISupplierService supplierService)
         {
-            _context = context;
+            _supplierService = supplierService ?? throw new ArgumentNullException(nameof(supplierService));
         }
 
         // GET: api/Suppliers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Supplier>>> GetSuppliers()
         {
-            return await _context.Suppliers.ToListAsync();
+            var suppliers = await _supplierService.GetAllSuppliersAsync();
+            return Ok(suppliers);
         }
 
         // GET: api/Suppliers/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Supplier>> GetSupplier(Guid id)
         {
-            var supplier = await _context.Suppliers.FindAsync(id);
+            var supplier = await _supplierService.GetSupplierByIdAsync(id);
 
             if (supplier == null)
             {
                 return NotFound();
             }
 
-            return supplier;
+            return Ok(supplier);
         }
 
         // PUT: api/Suppliers/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        /// <summary>
+        /// Updates an existing supplier
+        /// </summary>
+        /// <remarks>
+        /// Minimum required data:
+        ///
+        ///     PUT /api/Suppliers/{id}
+        ///     {
+        ///         "id": "c3d4e5f6-7890-4ef0-d5fe-34567890abcd",
+        ///         "location": "Updated Location"
+        ///     }
+        ///
+        /// Note: The id in the URL must match the id in the request body
+        /// </remarks>
         [HttpPut("{id}")]
         public async Task<IActionResult> PutSupplier(Guid id, Supplier supplier)
         {
             if (id != supplier.Id)
             {
-                return BadRequest();
+                return BadRequest("ID mismatch");
             }
-
-            _context.Entry(supplier).State = EntityState.Modified;
 
             try
             {
-                await _context.SaveChangesAsync();
+                var success = await _supplierService.UpdateSupplierAsync(id, supplier);
+
+                if (!success)
+                {
+                    return NotFound();
+                }
+
+                return NoContent();
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!SupplierExists(id))
+                if (!await _supplierService.SupplierExistsAsync(id))
                 {
                     return NotFound();
                 }
@@ -67,40 +88,48 @@ namespace GrainBrokerAPI.Controllers
                     throw;
                 }
             }
-
-            return NoContent();
         }
 
         // POST: api/Suppliers
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        /// <summary>
+        /// Creates a new supplier
+        /// </summary>
+        /// <remarks>
+        /// Minimum required data:
+        ///
+        ///     POST /api/Suppliers
+        ///     {
+        ///         "location": "Iowa Farm Co-op"
+        ///     }
+        ///
+        /// </remarks>
         [HttpPost]
         public async Task<ActionResult<Supplier>> PostSupplier(Supplier supplier)
         {
-            _context.Suppliers.Add(supplier);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetSupplier", new { id = supplier.Id }, supplier);
+            try
+            {
+                var createdSupplier = await _supplierService.CreateSupplierAsync(supplier);
+                return CreatedAtAction("GetSupplier", new { id = createdSupplier.Id }, createdSupplier);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // DELETE: api/Suppliers/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteSupplier(Guid id)
         {
-            var supplier = await _context.Suppliers.FindAsync(id);
-            if (supplier == null)
+            var success = await _supplierService.DeleteSupplierAsync(id);
+
+            if (!success)
             {
                 return NotFound();
             }
 
-            _context.Suppliers.Remove(supplier);
-            await _context.SaveChangesAsync();
-
             return NoContent();
-        }
-
-        private bool SupplierExists(Guid id)
-        {
-            return _context.Suppliers.Any(e => e.Id == id);
         }
     }
 }

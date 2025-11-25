@@ -13,6 +13,11 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<GrainBrokerContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Register application services
+builder.Services.AddScoped<GrainBrokerAPI.Services.ICustomerService, GrainBrokerAPI.Services.CustomerService>();
+builder.Services.AddScoped<GrainBrokerAPI.Services.IOrderService, GrainBrokerAPI.Services.OrderService>();
+builder.Services.AddScoped<GrainBrokerAPI.Services.ISupplierService, GrainBrokerAPI.Services.SupplierService>();
+
 
 var app = builder.Build();
 

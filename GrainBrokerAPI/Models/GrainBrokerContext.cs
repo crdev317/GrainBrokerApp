@@ -13,19 +13,16 @@ public class GrainBrokerContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Customer
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.Property(e => e.Location).HasMaxLength(200);
         });
 
-        // Supplier
         modelBuilder.Entity<Supplier>(entity =>
         {
             entity.Property(e => e.Location).HasMaxLength(200);
         });
 
-        // Order
         modelBuilder.Entity<Order>(entity =>
         {
             entity.Property(e => e.CostOfDelivery)

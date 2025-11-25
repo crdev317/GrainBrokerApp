@@ -4,14 +4,12 @@ public class Order
 
     public TimeSpan OrderDate { get; set; }
     public Guid PurchaseOrder { get; set; }
-
-    // Foreign Keys
+    // FKs
     public Guid CustomerId { get; set; }
     public Guid SupplierId { get; set; }
 
-    // Navigation
-    public Customer Customer { get; set; }
-    public Supplier Supplier { get; set; }
+    public Customer? Customer { get; set; }
+    public Supplier? Supplier { get; set; }
 
     public int OrderReqAmtTon { get; set; }
     public int SuppliedAmtTon { get; set; }

@@ -4,5 +4,5 @@ public class Customer
     public string Location { get; set; }
 
     // Navigation
-    public ICollection<Order> Orders { get; set; }
+    public ICollection<Order>? Orders { get; set; }
 }

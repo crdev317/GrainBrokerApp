@@ -2,81 +2,204 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Moq;
 using GrainBrokerAPI.Controllers;
+using GrainBrokerAPI.Services;
 using NUnit.Framework;
 
 namespace GrainBrokerAPITests
 {
     [TestFixture]
-    public class SuppliersControllerTests : GrainBrokerControllerTestBase<SuppliersController, Supplier>
+    public class SuppliersControllerTests
     {
-        protected override SuppliersController CreateController(GrainBrokerContext context)
+        private Mock<ISupplierService> _mockService;
+        private SuppliersController _controller;
+
+        [SetUp]
+        public void Setup()
         {
-            return new SuppliersController(context);
+            _mockService = new Mock<ISupplierService>();
+            _controller = new SuppliersController(_mockService.Object);
         }
 
-        protected override Supplier CreateEntity(Guid id)
+        [Test]
+        public async Task GetSuppliers_ReturnsOkWithAllSuppliers()
         {
-            return new Supplier
+            // Arrange
+            var suppliers = new List<Supplier>
             {
-                Id = id,
-                Location = "Original Location"
+                new Supplier { Id = Guid.NewGuid(), Location = "Location1" },
+                new Supplier { Id = Guid.NewGuid(), Location = "Location2" }
             };
+            _mockService.Setup(s => s.GetAllSuppliersAsync()).ReturnsAsync(suppliers);
+
+            // Act
+            var result = await _controller.GetSuppliers();
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            var okResult = result.Result as OkObjectResult;
+            Assert.That(okResult, Is.Not.Null);
+            Assert.That(okResult.StatusCode, Is.EqualTo(200));
+            var returnedSuppliers = okResult.Value as IEnumerable<Supplier>;
+            Assert.That(returnedSuppliers, Is.Not.Null);
+            _mockService.Verify(s => s.GetAllSuppliersAsync(), Times.Once);
         }
 
-        protected override Supplier CreateUpdatedEntity(Guid id)
+        [Test]
+        public async Task GetSupplier_WithValidId_ReturnsOkWithSupplier()
         {
-            return new Supplier
-            {
-                Id = id,
-                Location = "Updated Location"
-            };
+            // Arrange
+            var supplierId = Guid.NewGuid();
+            var supplier = new Supplier { Id = supplierId, Location = "Test Location" };
+            _mockService.Setup(s => s.GetSupplierByIdAsync(supplierId)).ReturnsAsync(supplier);
+
+            // Act
+            var result = await _controller.GetSupplier(supplierId);
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            var okResult = result.Result as OkObjectResult;
+            Assert.That(okResult, Is.Not.Null);
+            Assert.That(okResult.StatusCode, Is.EqualTo(200));
+            var returnedSupplier = okResult.Value as Supplier;
+            Assert.That(returnedSupplier, Is.Not.Null);
+            Assert.That(returnedSupplier.Id, Is.EqualTo(supplierId));
+            _mockService.Verify(s => s.GetSupplierByIdAsync(supplierId), Times.Once);
         }
 
-        protected override Guid GetEntityId(Supplier entity)
+        [Test]
+        public async Task GetSupplier_WithInvalidId_ReturnsNotFound()
         {
-            return entity.Id;
+            // Arrange
+            var supplierId = Guid.NewGuid();
+            _mockService.Setup(s => s.GetSupplierByIdAsync(supplierId)).ReturnsAsync((Supplier)null);
+
+            // Act
+            var result = await _controller.GetSupplier(supplierId);
+
+            // Assert
+            Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+            _mockService.Verify(s => s.GetSupplierByIdAsync(supplierId), Times.Once);
         }
 
-        protected override DbSet<Supplier> GetDbSet(GrainBrokerContext context)
+        [Test]
+        public async Task PostSupplier_WithValidSupplier_ReturnsCreatedAtAction()
         {
-            return context.Suppliers;
+            // Arrange
+            var supplier = new Supplier { Id = Guid.NewGuid(), Location = "New Location" };
+            _mockService.Setup(s => s.CreateSupplierAsync(supplier)).ReturnsAsync(supplier);
+
+            // Act
+            var result = await _controller.PostSupplier(supplier);
+
+            // Assert
+            Assert.That(result, Is.Not.Null);
+            var createdResult = result.Result as CreatedAtActionResult;
+            Assert.That(createdResult, Is.Not.Null);
+            Assert.That(createdResult.StatusCode, Is.EqualTo(201));
+            Assert.That(createdResult.ActionName, Is.EqualTo("GetSupplier"));
+            var returnedSupplier = createdResult.Value as Supplier;
+            Assert.That(returnedSupplier, Is.Not.Null);
+            Assert.That(returnedSupplier.Id, Is.EqualTo(supplier.Id));
+            _mockService.Verify(s => s.CreateSupplierAsync(supplier), Times.Once);
         }
 
-        protected override string GetControllerName()
+        [Test]
+        public async Task PostSupplier_WithInvalidSupplier_ReturnsBadRequest()
         {
-            return "Suppliers";
+            // Arrange
+            var supplier = new Supplier { Id = Guid.NewGuid(), Location = "" };
+            _mockService.Setup(s => s.CreateSupplierAsync(supplier))
+                .ThrowsAsync(new ArgumentException("Location is required"));
+
+            // Act
+            var result = await _controller.PostSupplier(supplier);
+
+            // Assert
+            var badRequestResult = result.Result as BadRequestObjectResult;
+            Assert.That(badRequestResult, Is.Not.Null);
+            Assert.That(badRequestResult.StatusCode, Is.EqualTo(400));
+            _mockService.Verify(s => s.CreateSupplierAsync(supplier), Times.Once);
         }
 
-        protected override Task<ActionResult<IEnumerable<Supplier>>> CallGetAllMethod()
+        [Test]
+        public async Task PutSupplier_WithValidSupplier_ReturnsNoContent()
         {
-            return _controller.GetSuppliers();
+            // Arrange
+            var supplierId = Guid.NewGuid();
+            var supplier = new Supplier { Id = supplierId, Location = "Updated Location" };
+            _mockService.Setup(s => s.UpdateSupplierAsync(supplierId, supplier)).ReturnsAsync(true);
+
+            // Act
+            var result = await _controller.PutSupplier(supplierId, supplier);
+
+            // Assert
+            Assert.That(result, Is.InstanceOf<NoContentResult>());
+            _mockService.Verify(s => s.UpdateSupplierAsync(supplierId, supplier), Times.Once);
         }
 
-        protected override Task<ActionResult<Supplier>> CallGetByIdMethod(Guid id)
+        [Test]
+        public async Task PutSupplier_WithMismatchedId_ReturnsBadRequest()
         {
-            return _controller.GetSupplier(id);
+            // Arrange
+            var supplier = new Supplier { Id = Guid.NewGuid(), Location = "Test" };
+            var differentId = Guid.NewGuid();
+
+            // Act
+            var result = await _controller.PutSupplier(differentId, supplier);
+
+            // Assert
+            var badRequestResult = result as BadRequestObjectResult;
+            Assert.That(badRequestResult, Is.Not.Null);
+            Assert.That(badRequestResult.StatusCode, Is.EqualTo(400));
+            _mockService.Verify(s => s.UpdateSupplierAsync(It.IsAny<Guid>(), It.IsAny<Supplier>()), Times.Never);
         }
 
-        protected override Task<ActionResult<Supplier>> CallPostMethod(Supplier entity)
+        [Test]
+        public async Task PutSupplier_WithNonExistentSupplier_ReturnsNotFound()
         {
-            return _controller.PostSupplier(entity);
+            // Arrange
+            var supplierId = Guid.NewGuid();
+            var supplier = new Supplier { Id = supplierId, Location = "Test" };
+            _mockService.Setup(s => s.UpdateSupplierAsync(supplierId, supplier)).ReturnsAsync(false);
+
+            // Act
+            var result = await _controller.PutSupplier(supplierId, supplier);
+
+            // Assert
+            Assert.That(result, Is.InstanceOf<NotFoundResult>());
+            _mockService.Verify(s => s.UpdateSupplierAsync(supplierId, supplier), Times.Once);
         }
 
-        protected override Task<IActionResult> CallPutMethod(Guid id, Supplier entity)
+        [Test]
+        public async Task DeleteSupplier_WithValidId_ReturnsNoContent()
         {
-            return _controller.PutSupplier(id, entity);
+            // Arrange
+            var supplierId = Guid.NewGuid();
+            _mockService.Setup(s => s.DeleteSupplierAsync(supplierId)).ReturnsAsync(true);
+
+            // Act
+            var result = await _controller.DeleteSupplier(supplierId);
+
+            // Assert
+            Assert.That(result, Is.InstanceOf<NoContentResult>());
+            _mockService.Verify(s => s.DeleteSupplierAsync(supplierId), Times.Once);
         }
 
-        protected override Task<IActionResult> CallDeleteMethod(Guid id)
+        [Test]
+        public async Task DeleteSupplier_WithInvalidId_ReturnsNotFound()
         {
-            return _controller.DeleteSupplier(id);
-        }
+            // Arrange
+            var supplierId = Guid.NewGuid();
+            _mockService.Setup(s => s.DeleteSupplierAsync(supplierId)).ReturnsAsync(false);
 
-        protected override void VerifyEntityUpdated(Supplier entity)
-        {
-            Assert.That(entity.Location, Is.EqualTo("Updated Location"));
+            // Act
+            var result = await _controller.DeleteSupplier(supplierId);
+
+            // Assert
+            Assert.That(result, Is.InstanceOf<NotFoundResult>());
+            _mockService.Verify(s => s.DeleteSupplierAsync(supplierId), Times.Once);
         }
     }
 }
